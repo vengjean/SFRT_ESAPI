@@ -105,9 +105,9 @@ namespace MAAS_SFRThelper.ViewModels
             scriptContext = context;
 
             // Set UI value defaults
-            VThresh = 0;
+            VThresh = 50;
             IsHex = true; // default to hex
-            createIndividual = true; // default to keeping individual structures
+            createIndividual = false; // default to keeping individual structures
             XShift = 0;
             YShift = 0;
             Output = "Welcome to the SFRT-Helper";
@@ -121,13 +121,13 @@ namespace MAAS_SFRThelper.ViewModels
                 ValidSpacings.Add(new Spacing(spacing * i * 10));
             }
 
-            // Default to first value
-            SpacingSelected = ValidSpacings.FirstOrDefault();
+            SpacingSelected = ValidSpacings[5]; // default to 6cm spacing
 
             // Target structures
             targetStructures = new List<string>();
             targetSelected = -1;
             string planTargetId = null;
+            Radius = 7.5f;
 
             foreach (var i in context.StructureSet.Structures)
             {
@@ -223,8 +223,8 @@ namespace MAAS_SFRThelper.ViewModels
             void CreateLayer(double zCoord, double x0, double y0)
             {
                 // create planar hexagonal sphere packing grid
-                var yeven = Arange(y0, y0 + Ysize, 2.0 * A);
-                var xeven = Arange(x0, x0 + Xsize, 2.0 * A);
+                var yeven = Arange(y0, y0 + Ysize, A);
+                var xeven = Arange(x0, x0 + Xsize, A);
                 foreach (var y in yeven)
                 {
                     foreach (var x in xeven)
@@ -235,10 +235,10 @@ namespace MAAS_SFRThelper.ViewModels
                 }
             }
 
-            foreach (var z in Arange(Zstart, Zstart + Zsize, 2.0 * A))
+            foreach (var z in Arange(Zstart, Zstart + Zsize, A))
             {
                 CreateLayer(z, Xstart, Ystart);
-                CreateLayer(z + A, Xstart + (A / 2.0), Ystart + (A / 2.0));
+                CreateLayer(z + (A / 2.0), Xstart + (A / 2.0), Ystart);
 
             }
 
@@ -310,7 +310,7 @@ namespace MAAS_SFRThelper.ViewModels
                 AddContoursToMain(ref target, ref target_initial);
                 target.ConvertToHighResolution();
                 deleteAutoTarget = true;
-                MessageBox.Show("Created HiRes target.");
+                // MessageBox.Show("Created HiRes target.");
             }
             else
             {
@@ -352,9 +352,9 @@ namespace MAAS_SFRThelper.ViewModels
             if (IsHex)
             {
                 grid = BuildHexGrid(bounds.X + XShift, bounds.SizeX, bounds.Y + YShift, bounds.SizeY, z0, bounds.SizeZ);
-                structMain = CreateStructure("Lattice_Hot", true, true);
+                structMain = CreateStructure("Lattice_Hot", false, true);
                 cold_grid = BuildHexGrid(bounds.X + XShift + SpacingSelected.Value / 2, bounds.SizeX, bounds.Y + YShift, bounds.SizeY, z0, bounds.SizeZ);
-                structMain_cold = CreateStructure("Lattice_Cold", true, true);
+                structMain_cold = CreateStructure("Lattice_Cold", false, true);
             }
             else if (IsRect)
             {
@@ -363,7 +363,7 @@ namespace MAAS_SFRThelper.ViewModels
                 var zcoords = Arange(z0, zf, SpacingSelected.Value);
 
                 grid = BuildGrid(xcoords, ycoords, zcoords);
-                structMain = CreateStructure("LatticeRect", true, true);
+                structMain = CreateStructure("LatticeRect", false, true);
             }
 
             // 4. Make spheres
@@ -383,14 +383,17 @@ namespace MAAS_SFRThelper.ViewModels
             // var singleIds = new List<string>();
             // var singleVols = new List<double>();
 
-            // Calculate full sphere volume
-            var sphere_volume = (4.0 / 3.0) * Math.PI * Math.Pow(Radius, 3.0);
+            // Create a sphere at the center of PTV:
+            var temp_sphere = CreateStructure("Sphere_temporary", false, true);
+            BuildSphere(temp_sphere, new VVector(bounds.X + bounds.SizeX / 2, bounds.Y + bounds.SizeY / 2, bounds.Z + bounds.SizeZ / 2), Radius);
+            var sphere_volume = temp_sphere.Volume;
+            scriptContext.StructureSet.RemoveStructure(temp_sphere);
             var volThresh = sphere_volume * (VThresh / 100);
 
 
             // Starting message
             Output += "\nCreating spheres, this could take several minutes ...";
-            MessageBox.Show("About to create spheres.");
+            // MessageBox.Show("About to create spheres.");
 
             // Create all individual spheres
             foreach (VVector ctr in grid)
@@ -487,6 +490,7 @@ namespace MAAS_SFRThelper.ViewModels
                 msg += " Converted to Hi-Res";
             }
 
+            Output += "\n" + msg;
             if (showMessage) { MessageBox.Show(msg); }
             return structure;
         }
